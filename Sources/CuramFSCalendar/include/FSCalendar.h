@@ -9,11 +9,6 @@
 //
 //  FSCalendar is a superior awesome calendar control with high performance, high customizablility and very simple usage.
 //
-//  @see FSCalendarDataSource
-//  @see FSCalendarDelegate
-//  @see FSCalendarDelegateAppearance
-//  @see FSCalendarAppearance
-//
 
 #import <UIKit/UIKit.h>
 #import "FSCalendarAppearance.h"
