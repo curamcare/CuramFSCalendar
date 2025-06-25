@@ -1,9 +1,0 @@
-use_frameworks!
-
-platform :ios, '11.0'
-
-target 'CuramFSCalendar_Tests' do
-  pod 'CuramFSCalendar', :path => '../'
-  
-  
-end
