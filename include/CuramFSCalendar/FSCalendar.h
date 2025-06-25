@@ -1,5 +1,4 @@
 
-#import <UIKit/UIKit.h>
 #import "FSCalendarAppearance.h"
 #import "FSCalendarConstants.h"
 #import "FSCalendarCell.h"
