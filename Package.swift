@@ -16,7 +16,7 @@ let package = Package(
         .target(
             name: "CuramFSCalendar",
             path: "Sources/CuramFSCalendar",
-            publicHeadersPath: "include"  // ✅ now a relative subfolder
+            publicHeadersPath: "include"  // ✅ now a relative subfolder 111
         )
     ]
 )
