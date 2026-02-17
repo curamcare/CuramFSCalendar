@@ -65,7 +65,7 @@
 - (void)layoutSubviews
 {
     [super layoutSubviews];
-    self.collectionView.frame = CGRectMake(0, self.fs_height*0.1, self.fs_width, self.fs_height*0.9);
+    self.collectionView.frame = self.bounds;
 }
 
 - (void)dealloc
@@ -95,7 +95,8 @@
 
 - (void)scrollViewDidScroll:(UIScrollView *)scrollView
 {
-    [_collectionView.visibleCells makeObjectsPerformSelector:@selector(setNeedsLayout)];
+    // Force refresh on every scroll tick
+    [self.collectionView reloadItemsAtIndexPaths:self.collectionView.indexPathsForVisibleItems];
 }
 
 #pragma mark - Properties
@@ -153,52 +154,58 @@
 
 - (void)configureCell:(FSCalendarHeaderCell *)cell atIndexPath:(NSIndexPath *)indexPath
 {
+    if (!self.calendar) {
+        cell.titleLabel.text = @"";
+        return;
+    }
+
     FSCalendarAppearance *appearance = self.calendar.appearance;
     cell.titleLabel.font = appearance.headerTitleFont;
     cell.titleLabel.textColor = appearance.headerTitleColor;
-    cell.titleLabel.textAlignment = appearance.headerTitleAlignment; 
-    _calendar.formatter.dateFormat = appearance.headerDateFormat;
-    NSString *text = nil;
-    switch (self.calendar.transitionCoordinator.representingScope) {
-        case FSCalendarScopeMonth: {
-            if (_scrollDirection == UICollectionViewScrollDirectionHorizontal) {
-                // 多出的两项需要制空
-                if ((indexPath.item == 0 || indexPath.item == [self.collectionView numberOfItemsInSection:0] - 1)) {
-                    text = nil;
-                } else {
-                    NSDate *date = [self.calendar.gregorian dateByAddingUnit:NSCalendarUnitMonth value:indexPath.item-1 toDate:self.calendar.minimumDate options:0];
-                    text = [_calendar.formatter stringFromDate:date];
-                }
-            } else {
-                NSDate *date = [self.calendar.gregorian dateByAddingUnit:NSCalendarUnitMonth value:indexPath.item toDate:self.calendar.minimumDate options:0];
-                text = [_calendar.formatter stringFromDate:date];
-            }
-            break;
-        }
-        case FSCalendarScopeWeek: {
-            if ((indexPath.item == 0 || indexPath.item == [self.collectionView numberOfItemsInSection:0] - 1)) {
-                text = nil;
-            } else {
-                NSDate *firstPage = [self.calendar.gregorian fs_middleDayOfWeek:self.calendar.minimumDate];
-                NSDate *date = [self.calendar.gregorian dateByAddingUnit:NSCalendarUnitWeekOfYear value:indexPath.item-1 toDate:firstPage options:0];
-                text = [_calendar.formatter stringFromDate:date];
-            }
-            break;
-        }
-        default: {
-            break;
-        }
-    }
-    BOOL usesUpperCase   = (appearance.caseOptions & 15) == FSCalendarCaseOptionsHeaderUsesUpperCase;
-    BOOL usesCapitalized = (appearance.caseOptions & 15) == FSCalendarCaseOptionsHeaderUsesCapitalized;
+    cell.titleLabel.textAlignment = appearance.headerTitleAlignment;
+
+    self.calendar.formatter.dateFormat = appearance.headerDateFormat;
+
+    CGFloat itemWidth = self.collectionView.fs_width * 0.5;
+    CGFloat currentOffset = self.collectionView.contentOffset.x;
+
+    // ✅ FIX: center-based index
+    NSInteger currentIndex =
+        MAX(0, (NSInteger)((currentOffset + itemWidth * 0.5) / itemWidth));
+
+    NSInteger monthOffset = indexPath.item - currentIndex;
+
+    NSDate *baseDate = self.calendar.currentPage ?: [NSDate date];
+
+    NSDate *date = [self.calendar.gregorian
+        dateByAddingUnit:NSCalendarUnitMonth
+                   value:indexPath.item - 1
+                  toDate:self.calendar.minimumDate
+                 options:0];
+
+    NSString *text = [self.calendar.formatter stringFromDate:date];
+
+    BOOL usesUpperCase =
+        (appearance.caseOptions & 15) == FSCalendarCaseOptionsHeaderUsesUpperCase;
+    BOOL usesCapitalized =
+        (appearance.caseOptions & 15) == FSCalendarCaseOptionsHeaderUsesCapitalized;
+
     if (usesUpperCase) {
         text = text.uppercaseString;
     } else if (usesCapitalized) {
         text = text.capitalizedString;
     }
+
     cell.titleLabel.text = text;
+
+    // Force visibility (safe)
+    cell.alpha = 1.0;
+    cell.contentView.alpha = 1.0;
+    cell.titleLabel.alpha = 1.0;
+
     [cell setNeedsLayout];
 }
+
 
 - (void)configureAppearance
 {
@@ -241,13 +248,27 @@
                                          titleHeaderOffset.y);
     
     if (self.header.scrollDirection == UICollectionViewScrollDirectionHorizontal) {
-        CGFloat position = [self.contentView convertPoint:CGPointMake(CGRectGetMidX(self.contentView.bounds), CGRectGetMidY(self.contentView.bounds)) toView:self.header].x;
+
+        CGFloat position = [self.contentView convertPoint:
+            CGPointMake(CGRectGetMidX(self.contentView.bounds),
+                        CGRectGetMidY(self.contentView.bounds))
+            toView:self.header].x;
+
         CGFloat center = CGRectGetMidX(self.header.bounds);
-        if (self.header.scrollEnabled) {
-            self.contentView.alpha = 1.0 - (1.0-self.header.calendar.appearance.headerMinimumDissolvedAlpha)*ABS(center-position)/self.fs_width;
-        } else {
-            self.contentView.alpha = (position > self.header.fs_width*0.25 && position < self.header.fs_width*0.75);
+
+        // 🔴 CRITICAL: always reset alpha
+        self.contentView.alpha = 1.0;
+
+        if (!self.header.scrollEnabled) {
+            return;
         }
+
+        CGFloat distance = ABS(center - position);
+        CGFloat ratio = MIN(distance / self.header.fs_width, 1.0);
+
+        self.contentView.alpha =
+            1.0 - (1.0 - self.header.calendar.appearance.headerMinimumDissolvedAlpha)
+            * ratio;
     } else if (self.header.scrollDirection == UICollectionViewScrollDirectionVertical) {
         CGFloat position = [self.contentView convertPoint:CGPointMake(CGRectGetMidX(self.contentView.bounds), CGRectGetMidY(self.contentView.bounds)) toView:self.header].y;
         CGFloat center = CGRectGetMidY(self.header.bounds);
